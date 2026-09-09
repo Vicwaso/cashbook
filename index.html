@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cashbook</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root {
+    --ink: #1B2A3D;
+    --ink-soft: #3E4E60;
+    --paper: #F6F3EE;
+    --paper-line: #E4DED2;
+    --gold: #B8863E;
+    --green: #3F6B4E;
+    --rust: #A8492E;
+    --card: #FFFFFF;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 460px;
+    margin: 0 auto;
+    padding: 22px 18px 60px;
+  }
+
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+  }
+
+  .masthead h1 {
+    font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: 0.2px;
+  }
+
+  .masthead .date {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .totals {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--paper-line);
+    border: 1px solid var(--paper-line);
+    margin-bottom: 22px;
+  }
+
+  .totals .cell {
+    background: var(--card);
+    padding: 14px 10px;
+    text-align: center;
+  }
+
+  .totals .cell .label {
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+
+  .totals .cell .amt {
+    font-family: Georgia, "Iowan Old Style", serif;
+    font-size: 19px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chart-box {
+    background: var(--card);
+    border: 1px solid var(--paper-line);
+    padding: 16px 14px 10px;
+    margin-bottom: 22px;
+  }
+
+  .chart-box .title {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+  }
+
+  .form-box {
+    background: var(--card);
+    border: 1px solid var(--paper-line);
+    padding: 16px;
+    margin-bottom: 22px;
+  }
+
+  .form-box .title {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+  }
+
+  .row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  label {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+  }
+
+  input, select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--paper-line);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 14px;
+    font-family: inherit;
+    border-radius: 2px;
+  }
+
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--ink);
+  }
+
+  .field { margin-bottom: 10px; }
+
+  button.submit {
+    width: 100%;
+    padding: 11px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    border-radius: 2px;
+    margin-top: 4px;
+  }
+
+  button.submit:active { opacity: 0.85; }
+
+  .ledger-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .ledger-title .title {
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .filter-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .chip {
+    padding: 5px 10px;
+    border: 1px solid var(--paper-line);
+    background: var(--card);
+    font-size: 11px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-radius: 20px;
+  }
+
+  .chip.active {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  .day-group { margin-bottom: 16px; }
+
+  .day-group .day-label {
+    font-size: 11px;
+    color: var(--ink-soft);
+    border-bottom: 1px solid var(--paper-line);
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .entry-row {
+    display: flex;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px dotted var(--paper-line);
+    gap: 10px;
+  }
+
+  .entry-row .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .entry-row .meta {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .entry-row .venture {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .entry-row .note {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .entry-row .amt {
+    font-family: Georgia, "Iowan Old Style", serif;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .entry-row .del {
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 30px 10px;
+    color: var(--ink-soft);
+    font-size: 13px;
+    border: 1px dashed var(--paper-line);
+  }
+
+  .loading {
+    text-align: center;
+    padding: 40px 10px;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  .lock-wrap {
+    max-width: 320px;
+    margin: 18vh auto 0;
+    padding: 0 20px;
+    text-align: center;
+  }
+
+  .lock-wrap h1 {
+    font-family: Georgia, "Iowan Old Style", serif;
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+
+  .lock-wrap p {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
+  }
+
+  .lock-wrap input {
+    text-align: center;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+
+  .lock-wrap .err {
+    font-size: 11.5px;
+    color: var(--rust);
+    height: 16px;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="loading">Opening the cashbook…</div>
+</div>
+
+<script>
+const VENTURES = [
+  { id: 'swiftink', label: 'SwiftInk', color: '#B8863E' },
+  { id: 'secretary', label: 'Secretary', color: '#3F6B4E' },
+  { id: 'tax', label: 'Tax filing', color: '#4A6FA5' },
+  { id: 'kliqcyber', label: 'Kliqcyber Employment', color: '#6B4E9B' },
+  { id: 'other', label: 'Other', color: '#8B5E6B' }
+];
+
+// Change this before you deploy — this is a basic deterrent lock, not real encryption.
+const CASHBOOK_PASSWORD = 'changeme';
+
+// Fill these in after creating your Supabase project (see README.md).
+const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY';
+
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let entries = [];
+let activeFilter = 'all';
+let storageOk = true;
+let unlocked = false;
+
+function ventureInfo(id) {
+  return VENTURES.find(v => v.id === id) || VENTURES[VENTURES.length - 1];
+}
+
+function fmtKES(n) {
+  return 'KES ' + Number(n).toLocaleString('en-KE', { maximumFractionDigits: 0 });
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+
+function startOfWeek() {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = (day === 0 ? 6 : day - 1);
+  d.setDate(d.getDate() - diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function startOfMonth() {
+  const d = new Date();
+  d.setDate(1);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function dayLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = todayStr();
+  const yest = new Date();
+  yest.setDate(yest.getDate() - 1);
+  const yestStr = yest.toISOString().slice(0,10);
+  if (dateStr === today) return 'Today';
+  if (dateStr === yestStr) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+async function loadEntries() {
+  try {
+    const { data, error } = await db.from('entries').select('*').order('date', { ascending: false });
+    if (error) throw error;
+    entries = (data || []).map(e => ({
+      id: e.id, amount: Number(e.amount), venture: e.venture,
+      date: e.date, time: e.time || '00:00:00', note: e.note || ''
+    }));
+  } catch (e) {
+    storageOk = false;
+    entries = [];
+  }
+}
+
+async function saveNewEntry(entry) {
+  const { error } = await db.from('entries').insert([entry]);
+  if (error) { storageOk = false; return false; }
+  return true;
+}
+
+async function deleteEntryRemote(id) {
+  const { error } = await db.from('entries').delete().eq('id', id);
+  if (error) { storageOk = false; return false; }
+  return true;
+}
+
+function computeTotals() {
+  const today = todayStr();
+  const wkStart = startOfWeek();
+  const moStart = startOfMonth();
+  let dayTotal = 0, weekTotal = 0, monthTotal = 0;
+  entries.forEach(e => {
+    const ed = new Date(e.date + 'T00:00:00');
+    if (e.date === today) dayTotal += e.amount;
+    if (ed >= wkStart) weekTotal += e.amount;
+    if (ed >= moStart) monthTotal += e.amount;
+  });
+  return { dayTotal, weekTotal, monthTotal };
+}
+
+function last7DaysData() {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    const total = entries.filter(e => e.date === ds).reduce((s, e) => s + e.amount, 0);
+    days.push({ date: ds, total, label: d.toLocaleDateString('en-GB', { weekday: 'narrow' }) });
+  }
+  return days;
+}
+
+function renderChart() {
+  const data = last7DaysData();
+  const max = Math.max(...data.map(d => d.total), 1);
+  const w = 400, h = 90, barW = 36, gap = (w - barW * 7) / 8;
+  let bars = '';
+  data.forEach((d, i) => {
+    const x = gap + i * (barW + gap);
+    const barH = Math.max((d.total / max) * (h - 24), d.total > 0 ? 4 : 0);
+    const y = h - barH - 16;
+    bars += `
+      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${d.date === todayStr() ? 'var(--ink)' : 'var(--gold)'}" rx="1"></rect>
+      <text x="${x + barW/2}" y="${h}" text-anchor="middle" font-size="10" fill="var(--ink-soft)">${d.label}</text>
+    `;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible">${bars}</svg>`;
+}
+
+function filteredEntries() {
+  const sorted = [...entries].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+  if (activeFilter === 'all') return sorted;
+  return sorted.filter(e => e.venture === activeFilter);
+}
+
+function groupByDay(list) {
+  const groups = {};
+  list.forEach(e => {
+    if (!groups[e.date]) groups[e.date] = [];
+    groups[e.date].push(e);
+  });
+  return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+function renderEntries() {
+  const list = filteredEntries();
+  if (list.length === 0) {
+    return '<div class="empty">No entries yet. Log your first sale or payment above.</div>';
+  }
+  const groups = groupByDay(list);
+  return groups.map(([date, items]) => {
+    const dayTotal = items.reduce((s, e) => s + e.amount, 0);
+    const rows = items.map(e => {
+      const v = ventureInfo(e.venture);
+      return `
+        <div class="entry-row">
+          <span class="dot" style="background:${v.color}"></span>
+          <div class="meta">
+            <div class="venture">${v.label}</div>
+            ${e.note ? `<div class="note">${escapeHtml(e.note)}</div>` : ''}
+          </div>
+          <div class="amt">${fmtKES(e.amount)}</div>
+          <button class="del" data-id="${e.id}" title="Delete">×</button>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div class="day-group">
+        <div class="day-label"><span>${dayLabel(date)}</span><span>${fmtKES(dayTotal)}</span></div>
+        ${rows}
+      </div>
+    `;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function renderChips() {
+  const all = `<button class="chip ${activeFilter === 'all' ? 'active' : ''}" data-f="all">All</button>`;
+  const rest = VENTURES.map(v => `<button class="chip ${activeFilter === v.id ? 'active' : ''}" data-f="${v.id}">${v.label}</button>`).join('');
+  return all + rest;
+}
+
+function render() {
+  const { dayTotal, weekTotal, monthTotal } = computeTotals();
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="masthead">
+      <h1>Cashbook</h1>
+      <div class="date">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+    </div>
+
+    <div class="totals">
+      <div class="cell"><div class="label">Today</div><div class="amt">${fmtKES(dayTotal)}</div></div>
+      <div class="cell"><div class="label">This week</div><div class="amt">${fmtKES(weekTotal)}</div></div>
+      <div class="cell"><div class="label">This month</div><div class="amt">${fmtKES(monthTotal)}</div></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="title">Last 7 days</div>
+      ${renderChart()}
+    </div>
+
+    <div class="form-box">
+      <div class="title">Log an entry</div>
+      <div class="row2">
+        <div class="field">
+          <label>Amount (KES)</label>
+          <input type="number" id="in-amount" inputmode="decimal" placeholder="0" min="0" step="1">
+        </div>
+        <div class="field">
+          <label>Venture</label>
+          <select id="in-venture">
+            ${VENTURES.map(v => `<option value="${v.id}">${v.label}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="in-date" value="${todayStr()}">
+        </div>
+        <div class="field">
+          <label>Note (optional)</label>
+          <input type="text" id="in-note" placeholder="e.g. banner order">
+        </div>
+      </div>
+      <button class="submit" id="btn-add">Add entry</button>
+    </div>
+
+    <div class="ledger-title">
+      <div class="title">Entries</div>
+    </div>
+    <div class="filter-chips">${renderChips()}</div>
+    <div id="entries-list">${renderEntries()}</div>
+  `;
+
+  document.getElementById('btn-add').addEventListener('click', handleAdd);
+  document.querySelectorAll('.chip').forEach(c => {
+    c.addEventListener('click', () => {
+      activeFilter = c.getAttribute('data-f');
+      document.getElementById('entries-list').innerHTML = renderEntries();
+      document.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      attachDeleteHandlers();
+    });
+  });
+  attachDeleteHandlers();
+}
+
+function attachDeleteHandlers() {
+  document.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      await deleteEntryRemote(id);
+      entries = entries.filter(e => e.id !== id);
+      render();
+    });
+  });
+}
+
+async function handleAdd() {
+  const amountEl = document.getElementById('in-amount');
+  const ventureEl = document.getElementById('in-venture');
+  const dateEl = document.getElementById('in-date');
+  const noteEl = document.getElementById('in-note');
+
+  const amount = parseFloat(amountEl.value);
+  if (!amount || amount <= 0) {
+    amountEl.style.borderColor = 'var(--rust)';
+    amountEl.focus();
+    return;
+  }
+
+  const entry = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    amount,
+    venture: ventureEl.value,
+    date: dateEl.value || todayStr(),
+    time: new Date().toISOString().slice(11, 19),
+    note: noteEl.value.trim()
+  };
+
+  await saveNewEntry(entry);
+  entries.push(entry);
+  render();
+}
+
+function renderLock() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="lock-wrap">
+      <h1>Cashbook</h1>
+      <p>Enter your password to open the ledger</p>
+      <input type="password" id="lock-input" placeholder="Password" autofocus>
+      <div class="err" id="lock-err"></div>
+      <button class="submit" id="lock-btn">Unlock</button>
+    </div>
+  `;
+  const tryUnlock = () => {
+    const val = document.getElementById('lock-input').value;
+    if (val === CASHBOOK_PASSWORD) {
+      unlocked = true;
+      init();
+    } else {
+      document.getElementById('lock-err').textContent = 'Wrong password';
+    }
+  };
+  document.getElementById('lock-btn').addEventListener('click', tryUnlock);
+  document.getElementById('lock-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') tryUnlock();
+  });
+}
+
+async function init() {
+  if (!unlocked) {
+    renderLock();
+    return;
+  }
+  await loadEntries();
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
