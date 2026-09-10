@@ -55,6 +55,64 @@
     color: var(--ink-soft);
   }
 
+  .net-box {
+    background: var(--card);
+    border: 1px solid var(--paper-line);
+    padding: 16px;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+
+  .net-box .net-label {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+  }
+
+  .net-box .net-amt {
+    font-family: Georgia, "Iowan Old Style", serif;
+    font-size: 27px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .net-box .net-amt.positive { color: var(--green); }
+  .net-box .net-amt.negative { color: var(--rust); }
+
+  .net-box .net-sub {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 8px;
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--paper-line);
+    background: var(--card);
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-radius: 2px;
+  }
+
+  .tab-btn.active {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
   .totals {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -96,6 +154,86 @@
     margin-bottom: 10px;
   }
 
+  .bills-box { margin-bottom: 22px; }
+
+  .bills-box .title {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+  }
+
+  .bill-card {
+    background: var(--card);
+    border: 1px solid var(--paper-line);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .bill-card .bill-name {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .bill-card .bill-due {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+
+  .bill-card .bill-due.overdue { color: var(--rust); }
+
+  .bill-card .bill-amt {
+    font-family: Georgia, "Iowan Old Style", serif;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .bill-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .bill-pay-btn {
+    padding: 6px 10px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .bill-paid-tag {
+    font-size: 11px;
+    color: var(--green);
+    white-space: nowrap;
+  }
+
+  .bill-del {
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+  }
+
+  .add-bill-toggle {
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+    margin-bottom: 10px;
+    display: inline-block;
+  }
+
   .form-box {
     background: var(--card);
     border: 1px solid var(--paper-line);
@@ -112,6 +250,13 @@
   .row2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .row3 {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
     gap: 10px;
     margin-bottom: 10px;
   }
@@ -156,6 +301,12 @@
   }
 
   button.submit:active { opacity: 0.85; }
+
+  button.submit.secondary {
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--paper-line);
+  }
 
   .ledger-title {
     display: flex;
@@ -316,6 +467,15 @@ const VENTURES = [
   { id: 'other', label: 'Other', color: '#8B5E6B' }
 ];
 
+const EXPENSE_CATEGORIES = [
+  { id: 'food', label: 'Food', color: '#A8492E' },
+  { id: 'transport', label: 'Transport', color: '#4A6FA5' },
+  { id: 'purchases', label: 'Purchases', color: '#8B5E6B' },
+  { id: 'other', label: 'Other', color: '#6B4E9B' }
+];
+
+const BILL_COLOR = '#1B2A3D';
+
 // Change this before you deploy — this is a basic deterrent lock, not real encryption.
 const CASHBOOK_PASSWORD = '14589089';
 
@@ -325,13 +485,29 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let entries = [];
-let activeFilter = 'all';
+let entries = [];    // income
+let expenses = [];   // expenses (daily + bill payments)
+let bills = [];      // recurring bill definitions
+
+let activeTab = 'income'; // 'income' | 'expenses'
+let activeFilter = 'all';       // income venture filter
+let expenseFilter = 'all';      // expense category filter
+let showAddBill = false;
 let storageOk = true;
 let unlocked = false;
 
 function ventureInfo(id) {
   return VENTURES.find(v => v.id === id) || VENTURES[VENTURES.length - 1];
+}
+
+function categoryInfo(id) {
+  return EXPENSE_CATEGORIES.find(c => c.id === id) || EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1];
+}
+
+function expenseDisplay(e) {
+  if (e.type === 'bill') return { label: e.category, color: BILL_COLOR };
+  const c = categoryInfo(e.category);
+  return { label: c.label, color: c.color };
 }
 
 function fmtKES(n) {
@@ -359,6 +535,12 @@ function startOfMonth() {
   return d;
 }
 
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 function dayLabel(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const today = todayStr();
@@ -369,6 +551,8 @@ function dayLabel(dateStr) {
   if (dateStr === yestStr) return 'Yesterday';
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
+
+/* ---------- data loading ---------- */
 
 async function loadEntries() {
   try {
@@ -384,6 +568,31 @@ async function loadEntries() {
   }
 }
 
+async function loadExpenses() {
+  try {
+    const { data, error } = await db.from('expenses').select('*').order('date', { ascending: false });
+    if (error) throw error;
+    expenses = (data || []).map(e => ({
+      id: e.id, amount: Number(e.amount), type: e.type, category: e.category,
+      bill_id: e.bill_id || null, date: e.date, time: e.time || '00:00:00', note: e.note || ''
+    }));
+  } catch (e) {
+    storageOk = false;
+    expenses = [];
+  }
+}
+
+async function loadBills() {
+  try {
+    const { data, error } = await db.from('bills').select('*').order('due_day', { ascending: true });
+    if (error) throw error;
+    bills = (data || []).map(b => ({ id: b.id, name: b.name, amount: Number(b.amount), due_day: b.due_day }));
+  } catch (e) {
+    storageOk = false;
+    bills = [];
+  }
+}
+
 async function saveNewEntry(entry) {
   const { error } = await db.from('entries').insert([entry]);
   if (error) { storageOk = false; return false; }
@@ -396,12 +605,38 @@ async function deleteEntryRemote(id) {
   return true;
 }
 
-function computeTotals() {
+async function saveNewExpense(expense) {
+  const { error } = await db.from('expenses').insert([expense]);
+  if (error) { storageOk = false; return false; }
+  return true;
+}
+
+async function deleteExpenseRemote(id) {
+  const { error } = await db.from('expenses').delete().eq('id', id);
+  if (error) { storageOk = false; return false; }
+  return true;
+}
+
+async function saveNewBill(bill) {
+  const { error } = await db.from('bills').insert([bill]);
+  if (error) { storageOk = false; return false; }
+  return true;
+}
+
+async function deleteBillRemote(id) {
+  const { error } = await db.from('bills').delete().eq('id', id);
+  if (error) { storageOk = false; return false; }
+  return true;
+}
+
+/* ---------- totals ---------- */
+
+function computeTotalsFor(list) {
   const today = todayStr();
   const wkStart = startOfWeek();
   const moStart = startOfMonth();
   let dayTotal = 0, weekTotal = 0, monthTotal = 0;
-  entries.forEach(e => {
+  list.forEach(e => {
     const ed = new Date(e.date + 'T00:00:00');
     if (e.date === today) dayTotal += e.amount;
     if (ed >= wkStart) weekTotal += e.amount;
@@ -410,20 +645,20 @@ function computeTotals() {
   return { dayTotal, weekTotal, monthTotal };
 }
 
-function last7DaysData() {
+function last7DaysData(list) {
   const days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const ds = d.toISOString().slice(0, 10);
-    const total = entries.filter(e => e.date === ds).reduce((s, e) => s + e.amount, 0);
+    const total = list.filter(e => e.date === ds).reduce((s, e) => s + e.amount, 0);
     days.push({ date: ds, total, label: d.toLocaleDateString('en-GB', { weekday: 'narrow' }) });
   }
   return days;
 }
 
-function renderChart() {
-  const data = last7DaysData();
+function renderBarChart(list, barColor) {
+  const data = last7DaysData(list);
   const max = Math.max(...data.map(d => d.total), 1);
   const w = 400, h = 90, barW = 36, gap = (w - barW * 7) / 8;
   let bars = '';
@@ -432,12 +667,20 @@ function renderChart() {
     const barH = Math.max((d.total / max) * (h - 24), d.total > 0 ? 4 : 0);
     const y = h - barH - 16;
     bars += `
-      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${d.date === todayStr() ? 'var(--ink)' : 'var(--gold)'}" rx="1"></rect>
+      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${d.date === todayStr() ? 'var(--ink)' : barColor}" rx="1"></rect>
       <text x="${x + barW/2}" y="${h}" text-anchor="middle" font-size="10" fill="var(--ink-soft)">${d.label}</text>
     `;
   });
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible">${bars}</svg>`;
 }
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* ---------- income tab ---------- */
 
 function filteredEntries() {
   const sorted = [...entries].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
@@ -454,7 +697,7 @@ function groupByDay(list) {
   return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
 }
 
-function renderEntries() {
+function renderIncomeEntries() {
   const list = filteredEntries();
   if (list.length === 0) {
     return '<div class="empty">No entries yet. Log your first sale or payment above.</div>';
@@ -472,7 +715,7 @@ function renderEntries() {
             ${e.note ? `<div class="note">${escapeHtml(e.note)}</div>` : ''}
           </div>
           <div class="amt">${fmtKES(e.amount)}</div>
-          <button class="del" data-id="${e.id}" title="Delete">×</button>
+          <button class="del" data-id="${e.id}" data-kind="income" title="Delete">×</button>
         </div>
       `;
     }).join('');
@@ -485,27 +728,15 @@ function renderEntries() {
   }).join('');
 }
 
-function escapeHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
-}
-
-function renderChips() {
+function renderIncomeChips() {
   const all = `<button class="chip ${activeFilter === 'all' ? 'active' : ''}" data-f="all">All</button>`;
   const rest = VENTURES.map(v => `<button class="chip ${activeFilter === v.id ? 'active' : ''}" data-f="${v.id}">${v.label}</button>`).join('');
   return all + rest;
 }
 
-function render() {
-  const { dayTotal, weekTotal, monthTotal } = computeTotals();
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <div class="masthead">
-      <h1>Cashbook</h1>
-      <div class="date">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-    </div>
-
+function renderIncomeTab() {
+  const { dayTotal, weekTotal, monthTotal } = computeTotalsFor(entries);
+  return `
     <div class="totals">
       <div class="cell"><div class="label">Today</div><div class="amt">${fmtKES(dayTotal)}</div></div>
       <div class="cell"><div class="label">This week</div><div class="amt">${fmtKES(weekTotal)}</div></div>
@@ -514,11 +745,11 @@ function render() {
 
     <div class="chart-box">
       <div class="title">Last 7 days</div>
-      ${renderChart()}
+      ${renderBarChart(entries, 'var(--gold)')}
     </div>
 
     <div class="form-box">
-      <div class="title">Log an entry</div>
+      <div class="title">Log income</div>
       <div class="row2">
         <div class="field">
           <label>Amount (KES)</label>
@@ -541,41 +772,278 @@ function render() {
           <input type="text" id="in-note" placeholder="e.g. banner order">
         </div>
       </div>
-      <button class="submit" id="btn-add">Add entry</button>
+      <button class="submit" id="btn-add-income">Add entry</button>
     </div>
 
-    <div class="ledger-title">
-      <div class="title">Entries</div>
-    </div>
-    <div class="filter-chips">${renderChips()}</div>
-    <div id="entries-list">${renderEntries()}</div>
+    <div class="ledger-title"><div class="title">Income entries</div></div>
+    <div class="filter-chips">${renderIncomeChips()}</div>
+    <div id="entries-list">${renderIncomeEntries()}</div>
   `;
-
-  document.getElementById('btn-add').addEventListener('click', handleAdd);
-  document.querySelectorAll('.chip').forEach(c => {
-    c.addEventListener('click', () => {
-      activeFilter = c.getAttribute('data-f');
-      document.getElementById('entries-list').innerHTML = renderEntries();
-      document.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
-      c.classList.add('active');
-      attachDeleteHandlers();
-    });
-  });
-  attachDeleteHandlers();
 }
 
-function attachDeleteHandlers() {
+/* ---------- expenses tab ---------- */
+
+function billStatus(bill) {
+  const now = new Date();
+  const currentMonthStr = now.toISOString().slice(0, 7);
+  const paidEntry = expenses.find(e => e.bill_id === bill.id && e.date.slice(0, 7) === currentMonthStr);
+  if (paidEntry) return { paid: true, entry: paidEntry };
+  const todayDate = now.getDate();
+  return { paid: false, diff: bill.due_day - todayDate };
+}
+
+function renderBillCard(bill) {
+  const status = billStatus(bill);
+  if (status.paid) {
+    return `
+      <div class="bill-card">
+        <div>
+          <div class="bill-name">${escapeHtml(bill.name)}</div>
+          <div class="bill-due">Paid ${dayLabel(status.entry.date).toLowerCase()}</div>
+        </div>
+        <div class="bill-actions">
+          <span class="bill-amt">${fmtKES(status.entry.amount)}</span>
+          <span class="bill-paid-tag">✓ Paid</span>
+          <button class="bill-del" data-bill-del="${bill.id}" title="Remove bill">×</button>
+        </div>
+      </div>
+    `;
+  }
+  const overdue = status.diff < 0;
+  const dueText = overdue
+    ? `Overdue by ${Math.abs(status.diff)} day${Math.abs(status.diff) === 1 ? '' : 's'}`
+    : (status.diff === 0 ? 'Due today' : `Due ${ordinal(bill.due_day)}, in ${status.diff} day${status.diff === 1 ? '' : 's'}`);
+  return `
+    <div class="bill-card">
+      <div>
+        <div class="bill-name">${escapeHtml(bill.name)}</div>
+        <div class="bill-due ${overdue ? 'overdue' : ''}">${dueText}</div>
+      </div>
+      <div class="bill-actions">
+        <span class="bill-amt">${fmtKES(bill.amount)}</span>
+        <button class="bill-pay-btn" data-bill-pay="${bill.id}">Mark paid</button>
+        <button class="bill-del" data-bill-del="${bill.id}" title="Remove bill">×</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderBillsBox() {
+  const cards = bills.length
+    ? bills.map(renderBillCard).join('')
+    : '<div class="empty">No recurring bills yet.</div>';
+  const addForm = showAddBill ? `
+    <div class="form-box">
+      <div class="title">Add a recurring bill</div>
+      <div class="field">
+        <label>Bill name</label>
+        <input type="text" id="in-bill-name" placeholder="e.g. Rent">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Amount (KES)</label>
+          <input type="number" id="in-bill-amount" inputmode="decimal" placeholder="0" min="0" step="1">
+        </div>
+        <div class="field">
+          <label>Due day of month</label>
+          <input type="number" id="in-bill-day" min="1" max="31" placeholder="e.g. 5">
+        </div>
+      </div>
+      <button class="submit" id="btn-add-bill">Save bill</button>
+      <button class="submit secondary" id="btn-cancel-bill" style="margin-top:6px;">Cancel</button>
+    </div>
+  ` : `<span class="add-bill-toggle" id="btn-show-bill-form">+ Add a recurring bill</span>`;
+
+  return `
+    <div class="bills-box">
+      <div class="title">Recurring bills</div>
+      ${cards}
+      ${addForm}
+    </div>
+  `;
+}
+
+function filteredExpenses() {
+  const sorted = [...expenses].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+  if (expenseFilter === 'all') return sorted;
+  if (expenseFilter === 'bills') return sorted.filter(e => e.type === 'bill');
+  return sorted.filter(e => e.type === 'daily' && e.category === expenseFilter);
+}
+
+function renderExpenseEntries() {
+  const list = filteredExpenses();
+  if (list.length === 0) {
+    return '<div class="empty">No expenses logged yet.</div>';
+  }
+  const groups = groupByDay(list);
+  return groups.map(([date, items]) => {
+    const dayTotal = items.reduce((s, e) => s + e.amount, 0);
+    const rows = items.map(e => {
+      const d = expenseDisplay(e);
+      return `
+        <div class="entry-row">
+          <span class="dot" style="background:${d.color}"></span>
+          <div class="meta">
+            <div class="venture">${escapeHtml(d.label)}</div>
+            ${e.note ? `<div class="note">${escapeHtml(e.note)}</div>` : ''}
+          </div>
+          <div class="amt">${fmtKES(e.amount)}</div>
+          <button class="del" data-id="${e.id}" data-kind="expense" title="Delete">×</button>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div class="day-group">
+        <div class="day-label"><span>${dayLabel(date)}</span><span>${fmtKES(dayTotal)}</span></div>
+        ${rows}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderExpenseChips() {
+  const opts = [{ id: 'all', label: 'All' }, ...EXPENSE_CATEGORIES, { id: 'bills', label: 'Bills' }];
+  return opts.map(o => `<button class="chip ${expenseFilter === o.id ? 'active' : ''}" data-ef="${o.id}">${o.label}</button>`).join('');
+}
+
+function renderExpensesTab() {
+  const { dayTotal, weekTotal, monthTotal } = computeTotalsFor(expenses);
+  return `
+    <div class="totals">
+      <div class="cell"><div class="label">Today</div><div class="amt">${fmtKES(dayTotal)}</div></div>
+      <div class="cell"><div class="label">This week</div><div class="amt">${fmtKES(weekTotal)}</div></div>
+      <div class="cell"><div class="label">This month</div><div class="amt">${fmtKES(monthTotal)}</div></div>
+    </div>
+
+    ${renderBillsBox()}
+
+    <div class="chart-box">
+      <div class="title">Last 7 days</div>
+      ${renderBarChart(expenses, 'var(--rust)')}
+    </div>
+
+    <div class="form-box">
+      <div class="title">Log an expense</div>
+      <div class="row2">
+        <div class="field">
+          <label>Amount (KES)</label>
+          <input type="number" id="in-exp-amount" inputmode="decimal" placeholder="0" min="0" step="1">
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select id="in-exp-category">
+            ${EXPENSE_CATEGORIES.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="in-exp-date" value="${todayStr()}">
+        </div>
+        <div class="field">
+          <label>Note (optional)</label>
+          <input type="text" id="in-exp-note" placeholder="e.g. matatu fare">
+        </div>
+      </div>
+      <button class="submit" id="btn-add-expense">Add expense</button>
+    </div>
+
+    <div class="ledger-title"><div class="title">Expense entries</div></div>
+    <div class="filter-chips">${renderExpenseChips()}</div>
+    <div id="expense-list">${renderExpenseEntries()}</div>
+  `;
+}
+
+/* ---------- root render ---------- */
+
+function render() {
+  const inc = computeTotalsFor(entries);
+  const exp = computeTotalsFor(expenses);
+  const netMonth = inc.monthTotal - exp.monthTotal;
+  const netWeek = inc.weekTotal - exp.weekTotal;
+  const netDay = inc.dayTotal - exp.dayTotal;
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="masthead">
+      <h1>Cashbook</h1>
+      <div class="date">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+    </div>
+
+    <div class="net-box">
+      <div class="net-label">Net this month</div>
+      <div class="net-amt ${netMonth >= 0 ? 'positive' : 'negative'}">${netMonth >= 0 ? '' : '-'}${fmtKES(Math.abs(netMonth))}</div>
+      <div class="net-sub">
+        <span>Today: ${netDay >= 0 ? '' : '-'}${fmtKES(Math.abs(netDay))}</span>
+        <span>Week: ${netWeek >= 0 ? '' : '-'}${fmtKES(Math.abs(netWeek))}</span>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn ${activeTab === 'income' ? 'active' : ''}" data-tab="income">Income</button>
+      <button class="tab-btn ${activeTab === 'expenses' ? 'active' : ''}" data-tab="expenses">Expenses</button>
+    </div>
+
+    ${activeTab === 'income' ? renderIncomeTab() : renderExpensesTab()}
+  `;
+
+  attachHandlers();
+}
+
+function attachHandlers() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTab = btn.getAttribute('data-tab');
+      render();
+    });
+  });
+
+  if (activeTab === 'income') {
+    document.getElementById('btn-add-income').addEventListener('click', handleAddIncome);
+    document.querySelectorAll('[data-f]').forEach(c => {
+      c.addEventListener('click', () => { activeFilter = c.getAttribute('data-f'); render(); });
+    });
+  } else {
+    document.getElementById('btn-add-expense').addEventListener('click', handleAddExpense);
+    document.querySelectorAll('[data-ef]').forEach(c => {
+      c.addEventListener('click', () => { expenseFilter = c.getAttribute('data-ef'); render(); });
+    });
+    const showBtn = document.getElementById('btn-show-bill-form');
+    if (showBtn) showBtn.addEventListener('click', () => { showAddBill = true; render(); });
+    const cancelBtn = document.getElementById('btn-cancel-bill');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => { showAddBill = false; render(); });
+    const addBillBtn = document.getElementById('btn-add-bill');
+    if (addBillBtn) addBillBtn.addEventListener('click', handleAddBill);
+    document.querySelectorAll('[data-bill-pay]').forEach(btn => {
+      btn.addEventListener('click', () => handleMarkPaid(btn.getAttribute('data-bill-pay')));
+    });
+    document.querySelectorAll('[data-bill-del]').forEach(btn => {
+      btn.addEventListener('click', () => handleDeleteBill(btn.getAttribute('data-bill-del')));
+    });
+  }
+
   document.querySelectorAll('.del').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.getAttribute('data-id');
-      await deleteEntryRemote(id);
-      entries = entries.filter(e => e.id !== id);
+      const kind = btn.getAttribute('data-kind');
+      if (kind === 'income') {
+        await deleteEntryRemote(id);
+        entries = entries.filter(e => e.id !== id);
+      } else {
+        await deleteExpenseRemote(id);
+        expenses = expenses.filter(e => e.id !== id);
+      }
       render();
     });
   });
 }
 
-async function handleAdd() {
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+async function handleAddIncome() {
   const amountEl = document.getElementById('in-amount');
   const ventureEl = document.getElementById('in-venture');
   const dateEl = document.getElementById('in-date');
@@ -589,7 +1057,7 @@ async function handleAdd() {
   }
 
   const entry = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    id: newId(),
     amount,
     venture: ventureEl.value,
     date: dateEl.value || todayStr(),
@@ -601,6 +1069,82 @@ async function handleAdd() {
   entries.push(entry);
   render();
 }
+
+async function handleAddExpense() {
+  const amountEl = document.getElementById('in-exp-amount');
+  const catEl = document.getElementById('in-exp-category');
+  const dateEl = document.getElementById('in-exp-date');
+  const noteEl = document.getElementById('in-exp-note');
+
+  const amount = parseFloat(amountEl.value);
+  if (!amount || amount <= 0) {
+    amountEl.style.borderColor = 'var(--rust)';
+    amountEl.focus();
+    return;
+  }
+
+  const expense = {
+    id: newId(),
+    amount,
+    type: 'daily',
+    category: catEl.value,
+    bill_id: null,
+    date: dateEl.value || todayStr(),
+    time: new Date().toISOString().slice(11, 19),
+    note: noteEl.value.trim()
+  };
+
+  await saveNewExpense(expense);
+  expenses.push(expense);
+  render();
+}
+
+async function handleAddBill() {
+  const nameEl = document.getElementById('in-bill-name');
+  const amountEl = document.getElementById('in-bill-amount');
+  const dayEl = document.getElementById('in-bill-day');
+
+  const name = nameEl.value.trim();
+  const amount = parseFloat(amountEl.value);
+  const dueDay = parseInt(dayEl.value, 10);
+
+  if (!name) { nameEl.style.borderColor = 'var(--rust)'; nameEl.focus(); return; }
+  if (!amount || amount <= 0) { amountEl.style.borderColor = 'var(--rust)'; amountEl.focus(); return; }
+  if (!dueDay || dueDay < 1 || dueDay > 31) { dayEl.style.borderColor = 'var(--rust)'; dayEl.focus(); return; }
+
+  const bill = { id: newId(), name, amount, due_day: dueDay };
+  await saveNewBill(bill);
+  bills.push(bill);
+  bills.sort((a, b) => a.due_day - b.due_day);
+  showAddBill = false;
+  render();
+}
+
+async function handleMarkPaid(billId) {
+  const bill = bills.find(b => b.id === billId);
+  if (!bill) return;
+  const expense = {
+    id: newId(),
+    amount: bill.amount,
+    type: 'bill',
+    category: bill.name,
+    bill_id: bill.id,
+    date: todayStr(),
+    time: new Date().toISOString().slice(11, 19),
+    note: ''
+  };
+  await saveNewExpense(expense);
+  expenses.push(expense);
+  render();
+}
+
+async function handleDeleteBill(billId) {
+  await deleteBillRemote(billId);
+  bills = bills.filter(b => b.id !== billId);
+  render();
+}
+
+/* ---------- lock + init ---------- */
 
 function renderLock() {
   const app = document.getElementById('app');
@@ -633,7 +1177,7 @@ async function init() {
     renderLock();
     return;
   }
-  await loadEntries();
+  await Promise.all([loadEntries(), loadExpenses(), loadBills()]);
   render();
 }
 
