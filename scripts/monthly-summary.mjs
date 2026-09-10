@@ -13,43 +13,61 @@ function fmtKES(n) {
 
 function previousMonthRange() {
   const now = new Date();
-  // Run on the 1st, so "previous month" is last month relative to today.
   const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const end = new Date(now.getFullYear(), now.getMonth(), 0); // last day of prev month
+  const end = new Date(now.getFullYear(), now.getMonth(), 0);
   const toISO = d => d.toISOString().slice(0, 10);
   const label = start.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   return { startStr: toISO(start), endStr: toISO(end), label };
 }
 
-async function fetchEntries(startStr, endStr) {
-  const url = `${SUPABASE_URL}/rest/v1/entries?date=gte.${startStr}&date=lte.${endStr}&select=*`;
+async function fetchRows(table, startStr, endStr) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?date=gte.${startStr}&date=lte.${endStr}&select=*`;
   const res = await fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`
     }
   });
-  if (!res.ok) throw new Error(`Supabase fetch failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(`Supabase fetch (${table}) failed: ${res.status} ${await res.text()}`);
   return res.json();
 }
 
-function buildEmailHtml(label, entries) {
-  const total = entries.reduce((s, e) => s + Number(e.amount), 0);
-  const byVenture = {};
-  entries.forEach(e => {
-    byVenture[e.venture] = (byVenture[e.venture] || 0) + Number(e.amount);
+function breakdownRows(rows, keyFn) {
+  const byKey = {};
+  rows.forEach(r => {
+    const k = keyFn(r);
+    byKey[k] = (byKey[k] || 0) + Number(r.amount);
   });
-  const rows = Object.entries(byVenture)
+  return Object.entries(byKey)
     .sort((a, b) => b[1] - a[1])
-    .map(([venture, amt]) => `<tr><td style="padding:6px 0;color:#3E4E60;">${venture}</td><td style="padding:6px 0;text-align:right;font-variant-numeric:tabular-nums;">${fmtKES(amt)}</td></tr>`)
+    .map(([k, amt]) => `<tr><td style="padding:6px 0;color:#3E4E60;">${k}</td><td style="padding:6px 0;text-align:right;font-variant-numeric:tabular-nums;">${fmtKES(amt)}</td></tr>`)
     .join('');
+}
+
+function buildEmailHtml(label, income, expenses) {
+  const incomeTotal = income.reduce((s, e) => s + Number(e.amount), 0);
+  const expenseTotal = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const net = incomeTotal - expenseTotal;
+  const netColor = net >= 0 ? '#3F6B4E' : '#A8492E';
+
+  const incomeRows = breakdownRows(income, r => r.venture);
+  const expenseRows = breakdownRows(expenses, r => r.category);
 
   return `
     <div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:24px;color:#1B2A3D;">
       <h1 style="font-size:20px;border-bottom:2px solid #1B2A3D;padding-bottom:8px;">Cashbook — ${label}</h1>
-      <p style="font-size:14px;">Total earnings: <strong>${fmtKES(total)}</strong> across ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}.</p>
-      <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px;">
-        ${rows || '<tr><td>No entries logged this month.</td></tr>'}
+
+      <p style="font-size:15px;">Net: <strong style="color:${netColor};">${fmtKES(net)}</strong></p>
+      <p style="font-size:13px;color:#3E4E60;">Income: ${fmtKES(incomeTotal)} · Expenses: ${fmtKES(expenseTotal)}</p>
+
+      <h2 style="font-size:14px;margin-top:18px;">Income by venture</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        ${incomeRows || '<tr><td>No income logged.</td></tr>'}
+      </table>
+
+      <h2 style="font-size:14px;margin-top:18px;">Expenses by category</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        ${expenseRows || '<tr><td>No expenses logged.</td></tr>'}
       </table>
     </div>
   `;
@@ -75,8 +93,11 @@ async function sendEmail(label, html) {
 
 async function main() {
   const { startStr, endStr, label } = previousMonthRange();
-  const entries = await fetchEntries(startStr, endStr);
-  const html = buildEmailHtml(label, entries);
+  const [income, expenses] = await Promise.all([
+    fetchRows('entries', startStr, endStr),
+    fetchRows('expenses', startStr, endStr)
+  ]);
+  const html = buildEmailHtml(label, income, expenses);
   await sendEmail(label, html);
 }
 
