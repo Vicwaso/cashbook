@@ -1,0 +1,23 @@
+name: Monthly earnings summary
+
+on:
+  schedule:
+    # 06:00 UTC on the 1st of every month (~9am Nairobi time)
+    - cron: '0 6 1 * *'
+  workflow_dispatch: {}  # lets you trigger it manually from the Actions tab to test
+
+jobs:
+  send-summary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Send summary email
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SUMMARY_TO_EMAIL: wasongav01@gmail.com
+        run: node scripts/monthly-summary.mjs
