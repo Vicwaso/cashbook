@@ -494,7 +494,7 @@ let activeFilter = 'all';       // income venture filter
 let expenseFilter = 'all';      // expense category filter
 let showAddBill = false;
 let storageOk = true;
-let unlocked = false;
+let currentUser = null;
 
 function ventureInfo(id) {
   return VENTURES.find(v => v.id === id) || VENTURES[VENTURES.length - 1];
